@@ -14,4 +14,11 @@ class Tag extends Model
       protected $fillable = [
           "name",
       ];
+
+
+      // Les relations **************************************************************************************************************
+    public function quotes()
+    {
+        return $this->belongsToMany(Quote::class, 'quote_tag');
+    }
 }

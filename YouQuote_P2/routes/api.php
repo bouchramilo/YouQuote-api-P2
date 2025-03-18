@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\QuoteController;
 use App\Http\Controllers\API\TagController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ Route::get('/user', function (Request $request) {
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('tags', TagController::class);
+    Route::apiResource('quotes', QuoteController::class);
 
 });
 

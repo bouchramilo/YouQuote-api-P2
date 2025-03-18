@@ -16,4 +16,10 @@ class Category extends Model
         "name",
     ];
 
+    // Les relations **************************************************************************************************************
+    public function quotes()
+    {
+        return $this->belongsToMany(Quote::class, 'category_quote');
+    }
+
 }

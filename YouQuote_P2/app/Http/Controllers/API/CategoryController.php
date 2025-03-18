@@ -12,7 +12,7 @@ class CategoryController extends Controller
      */
     public function index(Request $request)
     {
-        // if (! $request->user() ||  $request->user()->hasRole('Admin')) {
+        // if ($request->user()->hasPermissionTo('create categories'))
         return response()->json([
             'message'   => 'Voici les cétégories disponibles pour ce moment',
             'categorie' => Category::all(),
