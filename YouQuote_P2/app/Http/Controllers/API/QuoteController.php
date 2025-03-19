@@ -2,7 +2,9 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Quote;
+use App\Models\Tag;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -142,7 +144,7 @@ class QuoteController extends Controller
 
         $user     = auth()->user();
         $citation = Quote::find($id);
-        if(! $citation){
+        if (! $citation) {
             return response()->json(['message' => 'Aucune citation Trouvée'], 404);
         }
 
@@ -156,14 +158,14 @@ class QuoteController extends Controller
     }
 
     // ************************************************************************************************************************
-// valider les quotes récement créer
+    // valider les quotes récement créer
     public function validateQuote(Request $request, string $id)
     {
         $user = $request->user();
 
         $citation = Quote::find($id);
 
-        if (!$citation) {
+        if (! $citation) {
             return response()->json([
                 'message' => 'Citation non trouvée.',
             ], 404);
@@ -174,7 +176,7 @@ class QuoteController extends Controller
             $citation->save();
 
             return response()->json([
-                'message' => 'Vous avez validé la citation.',
+                'message'  => 'Vous avez validé la citation.',
                 'citation' => $citation,
             ], 200);
         }
@@ -183,4 +185,73 @@ class QuoteController extends Controller
             'message' => 'Vous n\'avez pas le droit de valider la citation.',
         ], 403);
     }
+
+    // ************************************************************************************************************************
+    public function searchByCategory(Request $request)
+    {
+        $request->validate([
+            'category_id' => 'required|integer|exists:categories,id',
+        ]);
+
+        $categoryId = $request->category_id;
+
+        $quotes = Quote::whereHas('categories', function ($query) use ($categoryId) {
+            $query->where('categories.id', $categoryId);
+        })->with(['tags', 'categories'])
+            ->get();
+
+        $citations = $quotes->map(function ($citation) {
+            return [
+                "citation" => [
+                    "id"         => $citation->id,
+                    "content"    => $citation->content,
+                    "user_id"    => $citation->user->name,
+                    "popularite" => $citation->popularite,
+                    "deleted_at" => $citation->deleted_at,
+                    "tags"       => $citation->tags->pluck('name'),
+                    "categories" => $citation->categories->pluck('name'),
+                ],
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Les Citations avec le category :   ' . $categoryId . '  -  ' . Category::find($categoryId)->name,
+            'quotes'  => $citations,
+        ]);
+    }
+
+    // ************************************************************************************************************************
+    public function searchByTag(Request $request)
+    {
+        $request->validate([
+            'tag_id' => 'required|integer|exists:tags,id',
+        ]);
+
+        $tagId = $request->tag_id;
+
+        $quotes = Quote::whereHas('tags', function ($query) use ($tagId) {
+            $query->where('tags.id', $tagId);
+        })->with(['tags', 'categories'])
+            ->get();
+
+        $citations = $quotes->map(function ($citation) {
+            return [
+                "citation" => [
+                    "id"         => $citation->id,
+                    "content"    => $citation->content,
+                    "user_id"    => $citation->user->name,
+                    "popularite" => $citation->popularite,
+                    "deleted_at" => $citation->deleted_at,
+                    "tags"       => $citation->tags->pluck('name'),
+                    "categories" => $citation->categories->pluck('name'),
+                ],
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Les Citations avec le tag :   ' . $tagId . '  -  ' . Tag::find($tagId)->name,
+            'quotes'  => $citations,
+        ]);
+    }
+
 }

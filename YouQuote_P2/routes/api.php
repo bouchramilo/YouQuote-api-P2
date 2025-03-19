@@ -21,25 +21,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('likes', LikeController::class);
     Route::apiResource('favories', FavorieController::class);
 
+    Route::get('suppression', [SoftdeleteController::class, 'index'])->name('is_deleted');
+    Route::get('suppression/{id}', [SoftdeleteController::class, 'show']);
+    Route::post('suppression/{id}', [SoftdeleteController::class, 'restore']);
+    Route::delete('suppression/{id}', [SoftdeleteController::class, 'destroy']);
 
-
-    Route::get('suppression', [SoftdeleteController::class,'index'])->name('is_deleted');
-    Route::get('suppression/{id}', [SoftdeleteController::class,'show']);
-    Route::post('suppression/{id}', [SoftdeleteController::class,'restore']);
-    Route::delete('suppression/{id}', [SoftdeleteController::class,'destroy']);
-
-
+    Route::post('quotes/category', [QuoteController::class, 'searchByCategory']);
+    Route::post('quotes/tag', [QuoteController::class, 'searchByTag']);
 
     Route::post('quotes/valider/{id}', [QuoteController::class, 'validateQuote']);
 });
-
-
-
-
-
-
-
-
 
 // Authentification routes *************************************************************************************
 Route::post('register', [AuthController::class, 'register']);
