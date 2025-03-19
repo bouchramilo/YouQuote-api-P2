@@ -2,13 +2,13 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Like;
+use App\Models\Favorie;
 use App\Models\Quote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
-class LikeController extends Controller
+class FavorieController extends Controller
 {
     /** ********************************************************************************************************************
      * Display a listing of the resource.
@@ -17,28 +17,34 @@ class LikeController extends Controller
     {
         $user = auth()->user();
 
-        $mylikes = Like::where('user_id', $user->id)
+        $myFavorites = Favorie::where('user_id', $user->id)
             ->with(['quote.tags', 'quote.categories', 'quote.user'])
             ->get();
 
-        $formattedMylikes = $mylikes->map(function ($like) {
-            if (! $like->quote) {
+        if ($myFavorites->isEmpty()) {
+            return response()->json([
+                'message' => 'Aucun favori trouvé pour cet utilisateur.',
+            ], 200);
+        }
+
+        $formattedMyFavorites = $myFavorites->map(function ($favorie) {
+            if (! $favorie->quote) {
                 return null;
             }
 
             return [
                 "citation" => [
-                    "id"         => $like->quote->id,
-                    "content"    => $like->quote->content,
-                    "user_id"    => $like->quote->user->name,
-                    "popularite" => $like->quote->popularite,
-                    "tags"       => $like->quote->tags->pluck('name'),
-                    "categories" => $like->quote->categories->pluck('name'),
+                    "id"         => $favorie->quote->id,
+                    "content"    => $favorie->quote->content,
+                    "user_id"    => $favorie->quote->user ? $favorie->quote->user->name : 'Utilisateur inconnu',
+                    "popularite" => $favorie->quote->popularite,
+                    "tags"       => $favorie->quote->tags ? $favorie->quote->tags->pluck('name') : [],
+                    "categories" => $favorie->quote->categories ? $favorie->quote->categories->pluck('name') : [],
                 ],
             ];
-        });
+        })->filter();
 
-        return response()->json($formattedMylikes);
+        return response()->json($formattedMyFavorites, 200);
     }
 
     /** ********************************************************************************************************************
@@ -53,12 +59,12 @@ class LikeController extends Controller
                 'required',
                 'integer',
                 'exists:quotes,id',
-                Rule::unique('likes')->where(function ($query) use ($user) {
+                Rule::unique('favories')->where(function ($query) use ($user) {
                     return $query->where('user_id', $user->id);
                 }),
             ],
         ], [
-            'quote_id.unique' => 'Vous avez déjà aimé cette citation.',
+            'quote_id.unique' => 'Vous avez déjà ajouté cette citation à vos favoris.',
         ]);
 
         if ($validator->fails()) {
@@ -81,23 +87,23 @@ class LikeController extends Controller
             ], 410);
         }
 
-        $like = Like::create([
+        $favorite = Favorie::create([
             'quote_id' => $request->quote_id,
             'user_id'  => $user->id,
         ]);
 
-        $like->load(['quote.tags', 'quote.categories', 'quote.user']);
+        $favorite->load(['quote.tags', 'quote.categories', 'quote.user']);
 
         return response()->json([
             "success"  => true,
-            "message"  => "Vous avez aimé une citation.",
+            "message"  => "Vous avez ajouté une citation à vos favoris.",
             "citation" => [
-                "id"         => $like->quote->id,
-                "content"    => $like->quote->content,
-                "user_id"    => $like->quote->user->name,
-                "popularite" => $like->quote->popularite,
-                "tags"       => $like->quote->tags->pluck('name'),
-                "categories" => $like->quote->categories->pluck('name'),
+                "id"         => $favorite->quote->id,
+                "content"    => $favorite->quote->content,
+                "user_id"    => $favorite->quote->user->name,
+                "popularite" => $favorite->quote->popularite,
+                "tags"       => $favorite->quote->tags->pluck('name'),
+                "categories" => $favorite->quote->categories->pluck('name'),
             ],
         ], 201);
     }
@@ -112,29 +118,28 @@ class LikeController extends Controller
         $citation = Quote::findOrFail($id);
 
         if (! $user->hasRole('Admin') && $user->id !== $citation->user_id) {
-            return response()->json(['message' => 'Accès refusé, Vouz n\'avez pas l\'accès de voir les likes des quotes des autres auteurs'], 403);
+            return response()->json(['message' => 'Accès refusé, Vouz n\'avez pas l\'accès de voir les Favories des quotes des autres auteurs'], 403);
         }
 
-        $likes = Like::where('quote_id', $id)
+        $likes = Favorie::where('quote_id', $id)
             ->with(['user', 'quote'])
             ->get();
 
         if ($likes->isEmpty()) {
             return response()->json([
-                'message' => 'Aucun like trouvé pour cette citation.',
+                'message' => 'Aucun user ajoute cette citation dans leur favories.',
             ], 404);
         }
 
         $formattedLikes = $likes->map(function ($like) {
             return [
-                // 'quote' => $like->quote->content,
-                'user aimé' => $like->user->name . '  -  ' . $like->user->email,
+                'user préféré' => $like->user->name . '  -  ' . $like->user->email,
             ];
         });
 
         return response()->json([
-            'quote' => $citation->content,
-            'likes' => $formattedLikes,
+            'quote'       => $citation->content,
+            'Favorie de ' => $formattedLikes,
         ], 200);
     }
 
@@ -152,11 +157,11 @@ class LikeController extends Controller
     public function destroy(string $id)
     {
         $user = auth()->user();
-        $like = Like::where('user_id', $user->id)->where('quote_id', $id)->first();
+        $like = Favorie::where('user_id', $user->id)->where('quote_id', $id)->first();
         $like->delete();
         return response()->json([
             "success" => true,
-            "message" => "Vous avez retiré un like sur un citation.",
+            "message" => "Vous avez retiré un quote dans votre favories.",
         ], 200);
 
     }
