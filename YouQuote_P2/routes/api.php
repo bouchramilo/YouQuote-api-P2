@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\LikeController;
 use App\Http\Controllers\API\QuoteController;
 use App\Http\Controllers\API\SoftdeleteController;
 use App\Http\Controllers\API\TagController;
@@ -16,6 +17,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('tags', TagController::class);
     Route::apiResource('quotes', QuoteController::class);
+    Route::apiResource('likes', LikeController::class);
 
 
 
