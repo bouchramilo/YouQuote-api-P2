@@ -8,15 +8,31 @@ use Illuminate\Support\Facades\Validator;
 
 class QuoteController extends Controller
 {
-    /**
+    /** ************************************************************************************************************************
      * Display a listing of the resource.
      */
     public function index()
     {
-        return response()->json(Quote::all());
+        $quotes = Quote::with(['tags:name', 'categories:name', 'user'])->get();
+
+        $citations = $quotes->map(function ($citation) {
+            return [
+                "citation" => [
+                    "id"         => $citation->id,
+                    "content"    => $citation->content,
+                    "user_id"    => $citation->user->name,
+                    "popularite" => $citation->popularite,
+                    "deleted_at" => $citation->deleted_at,
+                    "tags"       => $citation->tags->pluck('name'),
+                    "categories" => $citation->categories->pluck('name'),
+                ],
+            ];
+        });
+
+        return response()->json($citations);
     }
 
-    /**
+    /** ************************************************************************************************************************
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
@@ -25,7 +41,6 @@ class QuoteController extends Controller
 
             $validator = Validator::make($request->all(), [
                 "content"      => "required|string",
-                "popularite"   => "required|integer",
                 "categories"   => "nullable|array",
                 "categories.*" => "exists:categories,id",
                 "tags"         => "nullable|array",
@@ -39,10 +54,9 @@ class QuoteController extends Controller
             }
 
             $citation = Quote::create([
-                'content'    => $request->content,
-                'user_id'    => $request->user()->id,
-                'popularite' => $request->popularite,
-                'nbr_mots'   => str_word_count($request->content),
+                'content'  => $request->content,
+                'user_id'  => $request->user()->id,
+                'nbr_mots' => str_word_count($request->content),
             ]);
 
             if ($request->has('categories')) {
@@ -64,27 +78,34 @@ class QuoteController extends Controller
         ], 403);
     }
 
-    /**
+    /** ************************************************************************************************************************
      * Display the specified resource.
      */
     public function show(Request $request, string $id)
     {
+        $citation = Quote::with(['tags:name', 'categories:name', 'user'])->findOrFail($id);
 
-        $citation             = Quote::findOrFail($id);
-        $citation->popularite = $citation->popularite + 1;
-        $citation->save();
+        $citation->increment('popularite');
+
         return response()->json([
             "success"  => true,
-            "citation" => $citation,
+            "citation" => [
+                "id"         => $citation->id,
+                "content"    => $citation->content,
+                "user_id"    => $citation->user->name,
+                "popularite" => $citation->popularite,
+                "tags"       => $citation->tags->pluck('name'),
+                "categories" => $citation->categories->pluck('name'),
+            ],
         ], 200);
-
     }
 
-    /**
+    /** ************************************************************************************************************************
      * Update the specified resource in storage.
      */
     public function update(Request $request, string $id)
     {
+        
         $user     = auth()->user();
         $citation = Quote::findOrFail($id);
 
@@ -113,11 +134,24 @@ class QuoteController extends Controller
         return response()->json(['message' => 'Citation mise à jour avec succès', 'citation' => $citation], 200);
     }
 
-    /**
+    /** ************************************************************************************************************************
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        //
+
+        $user     = auth()->user();
+        $citation = Quote::find($id);
+        if(! $citation){
+            return response()->json(['message' => 'Aucune citation Trouvée'], 404);
+        }
+
+        if (! $user->hasRole('Admin') && $user->id !== $citation->user_id) {
+            return response()->json(['message' => 'Accès refusé, Vous ne peux pas supprimer cette citation !'], 403);
+        }
+
+        $record = Quote::find($id);
+        $record->delete();
+        return response()->json(['message' => 'La suppresseion a été effectué avec succès '], 200);
     }
 }

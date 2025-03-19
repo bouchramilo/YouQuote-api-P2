@@ -26,9 +26,9 @@ class AuthController extends Controller
         ]);
 
         if (User::count() === 1) {
-            $user->assignRole('admin');
+            $user->assignRole('Admin');
         } else {
-            $user->assignRole('auteur');
+            $user->assignRole('Auteur');
         }
 
         $token = $user->createToken('auth_token');

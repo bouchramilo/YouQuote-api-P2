@@ -38,6 +38,9 @@ class DatabaseSeeder extends Seeder
             'add to favorites',
             'delete from favorites',
             'restore quote',
+            'delete definitly quote',
+            'view quote deleted',
+            'view All quotes deleted',
         ];
 
         // Création des permissions sans duplication
