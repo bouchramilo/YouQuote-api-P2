@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->text('content');
             $table->foreignId('user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->boolean('is_valide')->default(false);
             $table->integer('popularite')->default(0);
             $table->integer('nbr_mots')->default(0);
             $table->softDeletes();

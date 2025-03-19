@@ -28,6 +28,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('suppression/{id}', [SoftdeleteController::class,'restore']);
     Route::delete('suppression/{id}', [SoftdeleteController::class,'destroy']);
 
+
+
+    Route::post('quotes/valider/{id}', [QuoteController::class, 'validateQuote']);
 });
 
 

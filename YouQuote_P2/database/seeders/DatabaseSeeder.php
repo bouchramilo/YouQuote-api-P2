@@ -1,11 +1,9 @@
 <?php
-
 namespace Database\Seeders;
 
-use App\Models\User;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\Models\Permission;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
@@ -15,7 +13,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Vérifier et créer les rôles s'ils n'existent pas
-        $adminRole = Role::firstOrCreate(['name' => 'Admin']);
+        $adminRole  = Role::firstOrCreate(['name' => 'Admin']);
         $auteurRole = Role::firstOrCreate(['name' => 'Auteur']);
 
         // Liste des permissions
@@ -41,15 +39,17 @@ class DatabaseSeeder extends Seeder
             'delete definitly quote',
             'view quote deleted',
             'view All quotes deleted',
+            'validate quote',
         ];
 
-        // Création des permissions sans duplication
         foreach ($permissions as $permission) {
             Permission::firstOrCreate(['name' => $permission]);
         }
 
-        // Assignation des permissions aux rôles
+        // Admin premissions
         $adminRole->givePermissionTo($permissions);
+
+        // Auteur premissions
         $auteurRole->givePermissionTo([
             'create quote',
             'edit quote',

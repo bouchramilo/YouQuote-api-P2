@@ -13,7 +13,7 @@ class QuoteController extends Controller
      */
     public function index()
     {
-        $quotes = Quote::with(['tags:name', 'categories:name', 'user'])->get();
+        $quotes = Quote::where("is_valide", true)->with(['tags:name', 'categories:name', 'user'])->get();
 
         $citations = $quotes->map(function ($citation) {
             return [
@@ -105,7 +105,7 @@ class QuoteController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        
+
         $user     = auth()->user();
         $citation = Quote::findOrFail($id);
 
@@ -153,5 +153,34 @@ class QuoteController extends Controller
         $record = Quote::find($id);
         $record->delete();
         return response()->json(['message' => 'La suppresseion a été effectué avec succès '], 200);
+    }
+
+    // ************************************************************************************************************************
+// valider les quotes récement créer
+    public function validateQuote(Request $request, string $id)
+    {
+        $user = $request->user();
+
+        $citation = Quote::find($id);
+
+        if (!$citation) {
+            return response()->json([
+                'message' => 'Citation non trouvée.',
+            ], 404);
+        }
+
+        if ($user->hasPermissionTo('validate quote')) {
+            $citation->is_valide = true;
+            $citation->save();
+
+            return response()->json([
+                'message' => 'Vous avez validé la citation.',
+                'citation' => $citation,
+            ], 200);
+        }
+
+        return response()->json([
+            'message' => 'Vous n\'avez pas le droit de valider la citation.',
+        ], 403);
     }
 }
