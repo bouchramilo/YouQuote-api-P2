@@ -30,11 +30,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('quotes/tag', [QuoteController::class, 'searchByTag']);
 
     Route::post('quotes/valider/{id}', [QuoteController::class, 'validateQuote']);
+
 });
+
+// *************************************************************************************
+Route::get('citations/random/{count}', [QuoteController::class, 'random']);
+Route::post("citations/filter", [QuoteController::class, 'filterByLength']);
+Route::get('/citations/populaire', [QuoteController::class, 'popularite']);
 
 // Authentification routes *************************************************************************************
 Route::post('register', [AuthController::class, 'register']);
 
 Route::post('login', [AuthController::class, 'login']);
 
-Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+Route::post('logout', [AuthController::class, 'logout']);
+
+Route::post('/islogged', [AuthController::class, 'isLogged']);

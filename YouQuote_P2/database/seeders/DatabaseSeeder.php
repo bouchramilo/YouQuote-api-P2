@@ -2,8 +2,6 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
@@ -14,7 +12,13 @@ class DatabaseSeeder extends Seeder
     {
 
         $this->call([
+
             RolePermissionSeeder::class,
+
+            UserSeeder::class,
+            CategorySeeder::class,
+            TagSeeder::class,
+            QuoteSeeder::class,
         ]);
 
     }

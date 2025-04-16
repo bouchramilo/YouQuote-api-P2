@@ -3,12 +3,12 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Category;
+use App\Models\Tag;
 
-class CategorySeeder extends Seeder
+class TagSeeder extends Seeder
 {
     public function run()
     {
-        Category::factory()->count(10)->create();
+        Tag::factory()->count(20)->create();
     }
 }

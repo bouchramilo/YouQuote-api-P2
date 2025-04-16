@@ -254,4 +254,84 @@ class QuoteController extends Controller
         ]);
     }
 
+    // ***************************************************************************************************************************
+    public function random(Request $request)
+    {
+        $count = $request->route('count', 1);
+
+        if ($count < 1) {
+            return response()->json(['error' => 'Le paramètre count doit être supérieur ou égal à 1'], 400);
+        }
+
+        $citations = Quote::inRandomOrder()->take($count)->get();
+
+        if ($citations->isEmpty()) {
+            return response()->json(['error' => 'Aucune citation trouvée'], 404);
+        }
+
+        return response()->json($citations, 200);
+    }
+
+    // ***************************************************************************************************************************
+
+    public function filterByLength(Request $request)
+    {
+        try {
+            $min = $request->input('min') ? $request->input('min') : 0;
+            $max = $request->input('max') ? $request->input('max') : 1000;
+
+            $citations = Quote::where('nbr_mots', ">=", $min)->where('nbr_mots', "<=", $max)->get();
+
+            if ($citations->isEmpty()) {
+                return response()->json(['message' => 'Aucune citation trouvée'], 404);
+            }
+
+            return response()->json($citations, 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => 'Erreur interne du serveur',
+            ], 500);
+        }
+    }
+
+    // ***************************************************************************************************************************
+
+    //  public function popularite()
+    //  {
+    //     $quotes = Quote::orderBy('popularite', 'desc')->take(6)->get();
+
+    //     return response()->json([
+    //         'success' => true,
+    //         'data' => $quotes
+    //     ]);
+    //  }
+
+    public function popularite()
+    {
+        $quotes = Quote::with(['user', 'categories', 'tags'])
+            ->orderBy('popularite', 'desc')
+            ->take(6)
+            ->get()
+            ->map(function ($quote) {
+                return [
+                    'id'         => $quote->id,
+                    'content'    => $quote->content,
+                    'popularite' => $quote->popularite,
+                    'user'       => $quote->user ? $quote->user->name : null,
+                    'categories' => $quote->categories->pluck('name'),
+                    'tags'       => $quote->tags->pluck('name'),
+                    'created_at' => $quote->created_at,
+                    'updated_at' => $quote->updated_at,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data'    => $quotes,
+        ]);
+    }
+
+    // ***************************************************************************************************************************
+
 }
