@@ -12,15 +12,37 @@ class CategoryController extends Controller
      */
     public function index(Request $request)
     {
-        // if ($request->user()->hasPermissionTo('create categories'))
-        return response()->json([
-            'message'   => 'Voici les cétégories disponibles pour ce moment',
-            'categorie' => Category::all(),
-        ], 200);
-        // }
-        // return response()->json([
-        //     "message" => "waaaw",
-        // ]);
+        try {
+            // Check permissions (uncomment when ready)
+            // if (!$request->user()->hasPermissionTo('view categories')) {
+            //     return response()->json([
+            //         'message' => 'Unauthorized: You do not have permission to view categories',
+            //     ], 403);
+            // }
+
+            $categories = Category::all();
+
+            if ($categories->isEmpty()) {
+                return response()->json([
+                    'message' => 'No categories available at this time',
+                    'categories' => []
+                ], 200);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Available categories retrieved successfully',
+                'data' => $categories,
+                'count' => $categories->count()
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve categories',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -28,14 +50,14 @@ class CategoryController extends Controller
      */
     public function store(Request $request)
     {
-        if (! $request->user()) {
-            return response()->json([
-                "message" => "L'utilisateur n'est pas authentifié",
-            ], 401);
-        }
+        // if (! $request->user()) {
+        //     return response()->json([
+        //         "message" => "L'utilisateur n'est pas authentifié",
+        //     ], 401);
+        // }
 
-        if ($request->user()->hasPermissionTo('create categories'))
-        {
+        // if ($request->user()->hasPermissionTo('create categories'))
+        // {
 
             $fields = $request->validate([
                 'name' => 'required|max:255',
@@ -50,11 +72,11 @@ class CategoryController extends Controller
                 "nouvelle catégorie" => $category,
             ], 200);
 
-        }
+        // }
 
-        return response()->json([
-            "message" => "Vous n'avez pas l'accès pour créer des catégories",
-        ], 403);
+        // return response()->json([
+        //     "message" => "Vous n'avez pas l'accès pour créer des catégories",
+        // ], 403);
     }
 
     /**

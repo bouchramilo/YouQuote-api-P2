@@ -90,15 +90,16 @@ class QuoteController extends Controller
         $citation->increment('popularite');
 
         return response()->json([
-            "success"  => true,
-            "citation" => [
-                "id"         => $citation->id,
-                "content"    => $citation->content,
-                "user_id"    => $citation->user->name,
-                "popularite" => $citation->popularite,
-                "tags"       => $citation->tags->pluck('name'),
-                "categories" => $citation->categories->pluck('name'),
-            ],
+            // "success"  => true,
+            // "citation" => [
+            "id"         => $citation->id,
+            "content"    => $citation->content,
+            "user"       => $citation->user->name,
+            "created_at" => date_format($citation->created_at, 'd M Y'),
+            "popularite" => $citation->popularite,
+            "tags"       => $citation->tags->pluck('name'),
+            "categories" => $citation->categories->pluck('name'),
+            // ],
         ], 200);
     }
 
@@ -257,19 +258,62 @@ class QuoteController extends Controller
     // ***************************************************************************************************************************
     public function random(Request $request)
     {
-        $count = $request->route('count', 1);
+        try {
+            $count = $request->route('count', 1);
 
-        if ($count < 1) {
-            return response()->json(['error' => 'Le paramètre count doit être supérieur ou égal à 1'], 400);
+            if (! is_numeric($count) || $count < 1) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Le paramètre count doit être un nombre supérieur ou égal à 1',
+                    'data'    => null,
+                ], 400);
+            }
+
+            $citations = Quote::with(['user', 'tags', 'categories'])
+                ->inRandomOrder()
+                ->take((int) $count)
+                ->get();
+
+            if ($citations->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Aucune citation trouvée',
+                    'data'    => null,
+                ], 404);
+            }
+
+            $formattedCitations = $citations->map(function ($quote) {
+                return [
+                    'id'         => $quote->id,
+                    'content'    => $quote->content,
+                    'user'       => $quote->user ? $quote->user->name : null,
+                    'popularite' => $quote->popularite,
+                    'created_at' => $quote->created_at->format('Y-m-d H:i:s'),
+                    'tags'       => $quote->tags->pluck('name'),
+                    'categories' => $quote->categories->pluck('name'),
+                    // 'likes_count' => $quote->likes_count ?? 0,
+                    // 'views_count' => $quote->views_count ?? 0,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => $count == 1 ? 'Citation aléatoire récupérée' : 'Citations aléatoires récupérées',
+                'count'   => $citations->count(),
+                'data'    => $count == 1 ? $formattedCitations->first() : $formattedCitations,
+            ]);
+
+        } catch (\Exception $e) {
+            // Log de l'erreur
+            \Log::error('Erreur dans QuoteController@random: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Une erreur interne est survenue',
+                'error'   => config('app.debug') ? $e->getMessage() : null,
+                'data'    => null,
+            ], 500);
         }
-
-        $citations = Quote::inRandomOrder()->take($count)->get();
-
-        if ($citations->isEmpty()) {
-            return response()->json(['error' => 'Aucune citation trouvée'], 404);
-        }
-
-        return response()->json($citations, 200);
     }
 
     // ***************************************************************************************************************************

@@ -11,12 +11,48 @@ class TagController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    // public function index()
+    // {
+    //     return response()->json([
+    //         'message'   => 'Voici les Tags disponibles pour ce moment',
+    //         'Tags' => Tag::all(),
+    //     ], 200);
+    // }
+
+
+    public function index(Request $request)
     {
-        return response()->json([
-            'message'   => 'Voici les Tags disponibles pour ce moment',
-            'Tags' => Tag::all(),
-        ], 200);
+        try {
+            // Check permissions (uncomment when ready)
+            // if (!$request->user()->hasPermissionTo('view categories')) {
+            //     return response()->json([
+            //         'message' => 'Unauthorized: You do not have permission to view categories',
+            //     ], 403);
+            // }
+
+            $tags = Tag::all();
+
+            if ($tags->isEmpty()) {
+                return response()->json([
+                    'message' => 'No tags available at this time',
+                    'tags' => []
+                ], 200);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Available tags retrieved successfully',
+                'data' => $tags,
+                'count' => $tags->count()
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve tags',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -24,14 +60,14 @@ class TagController extends Controller
      */
     public function store(Request $request)
     {
-        if (! $request->user()) {
-            return response()->json([
-                "message" => "L'utilisateur n'est pas authentifié",
-            ], 401);
-        }
+        // if (! $request->user()) {
+        //     return response()->json([
+        //         "message" => "L'utilisateur n'est pas authentifié",
+        //     ], 401);
+        // }
 
-        if ($request->user()->hasPermissionTo('create tags'))
-        {
+        // if ($request->user()->hasPermissionTo('create tags'))
+        // {
 
             $fields = $request->validate([
                 'name' => 'required|max:255',
@@ -46,11 +82,11 @@ class TagController extends Controller
                 "nouvelle tag" => $tag,
             ], 200);
 
-        }
+        // }
 
-        return response()->json([
-            "message" => "Vous n'avez pas l'accès pour créer des tags",
-        ], 403);
+        // return response()->json([
+        //     "message" => "Vous n'avez pas l'accès pour créer des tags",
+        // ], 403);
     }
 
     /**
