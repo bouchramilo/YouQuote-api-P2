@@ -92,13 +92,13 @@ class CategoryController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        if (! $request->user()) {
-            return response()->json([
-                "message" => "L'utilisateur n'est pas authentifié",
-            ], 401);
-        }
+        // if (! $request->user()) {
+        //     return response()->json([
+        //         "message" => "L'utilisateur n'est pas authentifié",
+        //     ], 401);
+        // }
 
-        if ($request->user()->hasPermissionTo('edit categories')) {
+        // if ($request->user()->hasPermissionTo('edit categories')) {
 
             $fields = $request->validate([
                 'name' => 'required|max:255',
@@ -112,13 +112,13 @@ class CategoryController extends Controller
 
             return response()->json([
                 "message"            => "Vous avez modifié une catégorie avec succès",
-                "catégorie modifiée" => $categorie,
+                "category" => $categorie,
             ], 200);
-        }
+        // }
 
-        return response()->json([
-            "message" => "Vous n'avez pas l'accès pour modifier des catégories",
-        ], 403);
+        // return response()->json([
+        //     "message" => "Vous n'avez pas l'accès pour modifier des catégories",
+        // ], 403);
     }
 
     /**
@@ -126,7 +126,7 @@ class CategoryController extends Controller
      */
     public function destroy(Request $request, string $id)
     {
-        if ($request->user()->hasPermissionTo('delete categories')) {
+        // if ($request->user()->hasPermissionTo('delete categories')) {
 
             $category = Category::findOrFail($id);
             $delete   = $category->delete();
@@ -135,9 +135,9 @@ class CategoryController extends Controller
                 return response()->json(['message' => 'La suppression n\'est pas effectue'], 500);
             }
             return response()->json(['message' => 'La suppression a été bien effectue', 'category' => $category], 200);
-        }
-        return response()->json([
-            'message' => 'Vous n\'avez pas l\'accès de supprimer des categories'
-        ], 403);
+        // }
+        // return response()->json([
+        //     'message' => 'Vous n\'avez pas l\'accès de supprimer des categories'
+        // ], 403);
     }
 }

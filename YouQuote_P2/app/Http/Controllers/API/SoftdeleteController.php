@@ -12,7 +12,7 @@ class SoftdeleteController extends Controller
      */
     public function index(Request $request)
     {
-        if ($request->user()->hasPermissionTo('view All quotes deleted')) {
+        // if ($request->user()->hasPermissionTo('view All quotes deleted')) {
 
             $deleted = Quote::onlyTrashed()->with(['tags:name', 'categories:name', 'user'])->get();
 
@@ -31,10 +31,10 @@ class SoftdeleteController extends Controller
             });
 
             return response()->json($formattedeleted);
-        }
-        return response()->json([
-            "message" => "Vous n'avez pas l'accès de voir les citations supprimer",
-        ], 403);
+        // }
+        // return response()->json([
+        //     "message" => "Vous n'avez pas l'accès de voir les citations supprimer",
+        // ], 403);
     }
 
     /** ********************************************************************************************************************

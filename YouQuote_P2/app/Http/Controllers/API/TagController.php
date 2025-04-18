@@ -102,13 +102,13 @@ class TagController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        if (! $request->user()) {
-            return response()->json([
-                "message" => "L'utilisateur n'est pas authentifié",
-            ], 401);
-        }
+        // if (! $request->user()) {
+        //     return response()->json([
+        //         "message" => "L'utilisateur n'est pas authentifié",
+        //     ], 401);
+        // }
 
-        if ($request->user()->hasPermissionTo('edit tags')) {
+        // if ($request->user()->hasPermissionTo('edit tags')) {
 
             $fields = $request->validate([
                 'name' => 'required|max:255',
@@ -122,13 +122,13 @@ class TagController extends Controller
 
             return response()->json([
                 "message"            => "Vous avez modifié une tag avec succès",
-                "tag modifiée" => $tag,
+                "tag" => $tag,
             ], 200);
-        }
+        // }
 
-        return response()->json([
-            "message" => "Vous n'avez pas l'accès pour modifier des tags",
-        ], 403);
+        // return response()->json([
+        //     "message" => "Vous n'avez pas l'accès pour modifier des tags",
+        // ], 403);
     }
 
     /**
@@ -137,7 +137,7 @@ class TagController extends Controller
     public function destroy(Request $request, string $id)
     {
 
-        if ($request->user()->hasPermissionTo('delete tags')) {
+        // if ($request->user()->hasPermissionTo('delete tags')) {
 
             $tag = Tag::findOrFail($id);
             $delete   = $tag->delete();
@@ -146,9 +146,9 @@ class TagController extends Controller
                 return response()->json(['message' => 'La suppression n\'est pas effectue'], 500);
             }
             return response()->json(['message' => 'La suppression a été bien effectue', 'tag' => $tag], 200);
-        }
-        return response()->json([
-            'message' => 'Vous n\'avez pas l\'accès de supprimer des tags'
-        ], 403);
+        // }
+        // return response()->json([
+        //     'message' => 'Vous n\'avez pas l\'accès de supprimer des tags'
+        // ], 403);
     }
 }

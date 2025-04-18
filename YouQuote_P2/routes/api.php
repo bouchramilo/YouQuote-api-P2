@@ -16,7 +16,10 @@ Route::get('/user', function (Request $request) {
 
 Route::apiResource('categories', CategoryController::class);
 Route::apiResource('tags', TagController::class);
-Route::middleware('auth:sanctum')->group(function () {
+Route::apiResource('quotes', QuoteController::class);
+
+
+// Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('likes', LikeController::class);
     Route::apiResource('favories', FavorieController::class);
 
@@ -29,10 +32,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('quotes/tag', [QuoteController::class, 'searchByTag']);
 
     Route::post('quotes/valider/{id}', [QuoteController::class, 'validateQuote']);
+    Route::get('citations/nonvlider', [QuoteController::class, 'quoteNonValide']);
 
-});
+// });
 
-Route::apiResource('quotes', QuoteController::class);
 // *************************************************************************************
 Route::get('citations/random/{count}', [QuoteController::class, 'random']);
 Route::post("citations/filter", [QuoteController::class, 'filterByLength']);

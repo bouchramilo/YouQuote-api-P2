@@ -13,25 +13,72 @@ class QuoteController extends Controller
     /** ************************************************************************************************************************
      * Display a listing of the resource.
      */
+
     public function index()
     {
-        $quotes = Quote::where("is_valide", true)->with(['tags:name', 'categories:name', 'user'])->get();
+        // Chargement des relations avec une syntaxe plus propre
+        $quotes = Quote::with(['tags:id,name', 'categories:id,name', 'user:id,name'])
+            ->where("is_valide", true)
+            ->get();
 
-        $citations = $quotes->map(function ($citation) {
+        // Transformation des données avec une syntaxe plus concise
+        $formattedQuotes = $quotes->map(function ($quote) {
             return [
-                "citation" => [
-                    "id"         => $citation->id,
-                    "content"    => $citation->content,
-                    "user_id"    => $citation->user->name,
-                    "popularite" => $citation->popularite,
-                    "deleted_at" => $citation->deleted_at,
-                    "tags"       => $citation->tags->pluck('name'),
-                    "categories" => $citation->categories->pluck('name'),
-                ],
+                "id"         => $quote->id,
+                "content"    => $quote->content,
+                "author"     => $quote->user->name,
+                "popularity" => $quote->popularite,
+                "is_valide"  => $quote->is_valide,
+                "is_deleted" => ! is_null($quote->deleted_at),
+                "tags"       => $quote->tags->pluck('name')->all(),
+                "categories" => $quote->categories->pluck('name')->all(),
+                "created_at" => $quote->created_at->toISOString(),
+                "updated_at" => $quote->updated_at->toISOString(),
             ];
         });
 
-        return response()->json($citations);
+        return response()->json([
+            'data' => $formattedQuotes,
+            'meta' => [
+                'count'  => $quotes->count(),
+                'status' => 'success',
+            ],
+        ]);
+    }
+    /** ************************************************************************************************************************
+     * Display a listing of the resource.
+     */
+
+    public function quoteNonValide()
+    {
+        // Chargement des relations avec une syntaxe plus propre
+        $quotes = Quote::with(['tags:id,name', 'categories:id,name', 'user:id,name'])
+            ->where("is_valide", false)
+            ->get();
+
+        // Transformation des données avec une syntaxe plus concise
+        $formattedQuotes = $quotes->map(function ($quote) {
+            return [
+                "id"         => $quote->id,
+                "content"    => $quote->content,
+                "author"     => $quote->user->name,
+                "popularity" => $quote->popularite,
+                "is_valide"  => $quote->is_valide,
+                "is_deleted" => ! is_null($quote->deleted_at),
+                "tags"       => $quote->tags->pluck('name')->all(),
+                "categories" => $quote->categories->pluck('name')->all(),
+                "created_at" => $quote->created_at->toISOString(),
+                "updated_at" => $quote->updated_at->toISOString(),
+            ];
+        });
+
+        return response()->json([
+            'data' => $formattedQuotes,
+            'meta' => [
+                'count'  => $quotes->count(),
+                'status' => 'success',
+            ],
+        ]);
     }
 
     /** ************************************************************************************************************************
@@ -39,45 +86,45 @@ class QuoteController extends Controller
      */
     public function store(Request $request)
     {
-        if ($request->user()->hasPermissionTo('create quote')) {
+        // if ($request->user()->hasPermissionTo('create quote')) {
 
-            $validator = Validator::make($request->all(), [
-                "content"      => "required|string",
-                "categories"   => "nullable|array",
-                "categories.*" => "exists:categories,id",
-                "tags"         => "nullable|array",
-                "tags.*"       => "exists:tags,id",
-            ]);
+        $validator = Validator::make($request->all(), [
+            "content"      => "required|string",
+            "categories"   => "nullable|array",
+            "categories.*" => "exists:categories,id",
+            "tags"         => "nullable|array",
+            "tags.*"       => "exists:tags,id",
+        ]);
 
-            if ($validator->fails()) {
-                return response()->json([
-                    "error" => $validator->errors()->first(),
-                ], 400);
-            }
-
-            $citation = Quote::create([
-                'content'  => $request->content,
-                'user_id'  => $request->user()->id,
-                'nbr_mots' => str_word_count($request->content),
-            ]);
-
-            if ($request->has('categories')) {
-                $citation->categories()->attach($request->categories);
-            }
-
-            if ($request->has('tags')) {
-                $citation->tags()->attach($request->tags);
-            }
-
+        if ($validator->fails()) {
             return response()->json([
-                "success"  => true,
-                "citation" => $citation->load('categories', 'tags'),
-            ], 201);
+                "error" => $validator->errors()->first(),
+            ], 400);
+        }
+
+        $citation = Quote::create([
+            'content'  => $request->content,
+            'user_id'  => $request->user_id,
+            'nbr_mots' => str_word_count($request->content),
+        ]);
+
+        if ($request->has('categories')) {
+            $citation->categories()->attach($request->categories);
+        }
+
+        if ($request->has('tags')) {
+            $citation->tags()->attach($request->tags);
         }
 
         return response()->json([
-            "message" => "Vous n'avez pas l'accès pour créer des nouvelles citations",
-        ], 403);
+            "success"  => true,
+            "citation" => $citation->load('categories', 'tags'),
+        ], 201);
+        // }
+
+        // return response()->json([
+        //     "message" => "Vous n'avez pas l'accès pour créer des nouvelles citations",
+        // ], 403);
     }
 
     /** ************************************************************************************************************************
@@ -143,26 +190,27 @@ class QuoteController extends Controller
     public function destroy(Request $request, string $id)
     {
 
-        $user     = auth()->user();
-        $citation = Quote::find($id);
-        if (! $citation) {
-            return response()->json(['message' => 'Aucune citation Trouvée'], 404);
+        $role    = $request->role;
+        $user_id = $request->user_id;
+
+        $citation = Quote::findOrFail($id);
+
+        if (! $role === "Admin" || $user_id !== $citation->user_id) {
+            return response()->json(['message' => 'Action non autorisée'], 403);
         }
 
-        if (! $user->hasRole('Admin') && $user->id !== $citation->user_id) {
-            return response()->json(['message' => 'Accès refusé, Vous ne peux pas supprimer cette citation !'], 403);
-        }
-
-        $record = Quote::find($id);
-        $record->delete();
-        return response()->json(['message' => 'La suppresseion a été effectué avec succès '], 200);
+        $citation->delete();
+        return response()->json(['message' => 'Suppression réussie']);
     }
 
     // ************************************************************************************************************************
     // valider les quotes récement créer
     public function validateQuote(Request $request, string $id)
     {
-        $user = $request->user();
+        // $user = $request->user();
+        $role    = $request->role;
+        $user_id = $request->user_id;
+
 
         $citation = Quote::find($id);
 
@@ -172,14 +220,14 @@ class QuoteController extends Controller
             ], 404);
         }
 
-        if ($user->hasPermissionTo('validate quote')) {
-            $citation->is_valide = true;
-            $citation->save();
+        if ($role === "Admin") {
+        $citation->is_valide = true;
+        $citation->save();
 
-            return response()->json([
-                'message'  => 'Vous avez validé la citation.',
-                'citation' => $citation,
-            ], 200);
+        return response()->json([
+            'message'  => 'Vous avez validé la citation.',
+            'citation' => $citation,
+        ], 200);
         }
 
         return response()->json([
