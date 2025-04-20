@@ -4,12 +4,19 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Like;
 use App\Models\Quote;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 class LikeController extends Controller
 {
+    // *********************************************************************************************************************
+    private function isLiked(string $user_id, string $quote_id): bool
+    {
+        return Like::where('user_id', $user_id)
+                  ->where('quote_id', $quote_id)
+                  ->exists();
+    }
     /** ********************************************************************************************************************
      * Display a listing of the resource.
      */
@@ -30,10 +37,12 @@ class LikeController extends Controller
                 "citation" => [
                     "id"         => $like->quote->id,
                     "content"    => $like->quote->content,
-                    "user_id"    => $like->quote->user->name,
+                    "user"       => $like->quote->user->name,
+                    "user_id"    => $like->quote->user->id,
                     "popularite" => $like->quote->popularite,
                     "tags"       => $like->quote->tags->pluck('name'),
                     "categories" => $like->quote->categories->pluck('name'),
+                    "is_liked" => isLiked($like->quote->user->id, $like->quote->id),
                 ],
             ];
         });
@@ -46,19 +55,16 @@ class LikeController extends Controller
      */
     public function store(Request $request)
     {
-        $user = $request->user();
+        $user_id  = $request->user_id;
+        $user     = User::findOrFail($user_id);
+        $quote_id = $request->quote_id;
 
         $validator = Validator::make($request->all(), [
             'quote_id' => [
                 'required',
                 'integer',
                 'exists:quotes,id',
-                Rule::unique('likes')->where(function ($query) use ($user) {
-                    return $query->where('user_id', $user->id);
-                }),
             ],
-        ], [
-            'quote_id.unique' => 'Vous avez déjà aimé cette citation.',
         ]);
 
         if ($validator->fails()) {
@@ -67,7 +73,7 @@ class LikeController extends Controller
             ], 400);
         }
 
-        $citation = Quote::withTrashed()->find($request->quote_id);
+        $citation = Quote::withTrashed()->find($quote_id);
 
         if (! $citation) {
             return response()->json([
@@ -81,8 +87,33 @@ class LikeController extends Controller
             ], 410);
         }
 
+        // Vérifier si l'utilisateur a déjà liké cette citation
+        $existingLike = Like::where('user_id', $user->id)
+            ->where('quote_id', $quote_id)
+            ->first();
+
+        if ($existingLike) {
+            // Supprimer le like existant (unlike)
+            $existingLike->delete();
+
+            return response()->json([
+                "success"  => true,
+                "message"  => "Vous avez retiré votre like de cette citation.",
+                "liked"    => false,
+                "citation" => [
+                    "id"         => $citation->id,
+                    "content"    => $citation->content,
+                    "user_id"    => $citation->user->name,
+                    "popularite" => $citation->popularite,
+                    "tags"       => $citation->tags->pluck('name'),
+                    "categories" => $citation->categories->pluck('name'),
+                ],
+            ], 200);
+        }
+
+        // Créer un nouveau like
         $like = Like::create([
-            'quote_id' => $request->quote_id,
+            'quote_id' => $quote_id,
             'user_id'  => $user->id,
         ]);
 
@@ -91,6 +122,7 @@ class LikeController extends Controller
         return response()->json([
             "success"  => true,
             "message"  => "Vous avez aimé une citation.",
+            "liked"    => true,
             "citation" => [
                 "id"         => $like->quote->id,
                 "content"    => $like->quote->content,
@@ -108,33 +140,48 @@ class LikeController extends Controller
     public function show(string $id)
     {
 
-        $user     = auth()->user();
-        $citation = Quote::findOrFail($id);
-
-        if (! $user->hasRole('Admin') && $user->id !== $citation->user_id) {
-            return response()->json(['message' => 'Accès refusé, Vouz n\'avez pas l\'accès de voir les likes des quotes des autres auteurs'], 403);
-        }
-
-        $likes = Like::where('quote_id', $id)
-            ->with(['user', 'quote'])
+        $Likes = Like::where('quote_id', $id)
+            ->with(['quote' => function ($query) {
+                $query->with([
+                    'user:id,name,email',
+                ]);
+            }])
             ->get();
 
-        if ($likes->isEmpty()) {
+        if ($Likes->isEmpty()) {
             return response()->json([
-                'message' => 'Aucun like trouvé pour cette citation.',
-            ], 404);
+                'message' => 'Aucun favori trouvé pour cet utilisateur.',
+                'data'    => [],
+                'meta'    => [
+                    'count'  => 0,
+                    'status' => 'success',
+                ],
+            ], 200);
         }
 
-        $formattedLikes = $likes->map(function ($like) {
+        $formattedLikes = $Likes->map(function ($favorie) use ($id) {
+            if (! $favorie->quote) {
+                return null;
+            }
+
             return [
-                // 'quote' => $like->quote->content,
-                'user aimé' => $like->user->name . '  -  ' . $like->user->email,
+                "citation"  => [
+                    "id"      => $favorie->quote->id,
+                    "user_name"    => optional($favorie->quote->user)->name ?? 'Utilisateur inconnu',
+                    "user_email"    => optional($favorie->quote->user)->email ?? 'Utilisateur inconnu',
+                    "user_id" => optional($favorie->quote->user)->id,
+                ],
+                "like_id" => $favorie->id,
+                "added_at"  => $favorie->created_at->toISOString(),
             ];
-        });
+        })->filter()->values();
 
         return response()->json([
-            'quote' => $citation->content,
-            'likes' => $formattedLikes,
+            'data' => $formattedLikes,
+            'meta' => [
+                'count'  => $formattedLikes->count(),
+                'status' => 'success',
+            ],
         ], 200);
     }
 

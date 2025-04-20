@@ -3,8 +3,11 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Favorie;
+use App\Models\Like;
 use App\Models\Quote;
 use App\Models\Tag;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -17,7 +20,19 @@ class QuoteController extends Controller
     public function index()
     {
         // Chargement des relations avec une syntaxe plus propre
-        $quotes = Quote::with(['tags:id,name', 'categories:id,name', 'user:id,name'])
+        $quotes = Quote::with(['user:id,name',
+            'categories:id,name',
+            'tags:id,name',
+            'likes'     => function ($q) {
+                $q->select('quote_id')
+                    ->selectRaw('count(*) as total_likes')
+                    ->groupBy('quote_id');
+            },
+            'favorites' => function ($q) {
+                $q->select('quote_id')
+                    ->selectRaw('count(*) as total_favorites')
+                    ->groupBy('quote_id');
+            }])
             ->where("is_valide", true)
             ->get();
 
@@ -34,6 +49,8 @@ class QuoteController extends Controller
                 "categories" => $quote->categories->pluck('name')->all(),
                 "created_at" => $quote->created_at->toISOString(),
                 "updated_at" => $quote->updated_at->toISOString(),
+                'likes_count'     => $quote->likes->first()->total_likes ?? 0,
+                'favorites_count' => $quote->favorites->first()->total_favorites ?? 0,
             ];
         });
 
@@ -132,20 +149,36 @@ class QuoteController extends Controller
      */
     public function show(Request $request, string $id)
     {
-        $citation = Quote::with(['tags:name', 'categories:name', 'user'])->findOrFail($id);
+        $citation = Quote::with([
+            'user:id,name',
+            'categories:id,name',
+            'tags:id,name',
+            'likes'     => function ($q) {
+                $q->select('quote_id')
+                    ->selectRaw('count(*) as total_likes')
+                    ->groupBy('quote_id');
+            },
+            'favorites' => function ($q) {
+                $q->select('quote_id')
+                    ->selectRaw('count(*) as total_favorites')
+                    ->groupBy('quote_id');
+            },
+        ])->findOrFail($id);
 
         $citation->increment('popularite');
 
         return response()->json([
             // "success"  => true,
             // "citation" => [
-            "id"         => $citation->id,
-            "content"    => $citation->content,
-            "user"       => $citation->user->name,
-            "created_at" => date_format($citation->created_at, 'd M Y'),
-            "popularite" => $citation->popularite,
-            "tags"       => $citation->tags->pluck('name'),
-            "categories" => $citation->categories->pluck('name'),
+            "id"              => $citation->id,
+            "content"         => $citation->content,
+            "user"            => $citation->user->name,
+            "created_at"      => date_format($citation->created_at, 'd M Y'),
+            "popularite"      => $citation->popularite,
+            "tags"            => $citation->tags->pluck('name'),
+            "categories"      => $citation->categories->pluck('name'),
+            'likes_count'     => $citation->likes->first()->total_likes ?? 0,
+            'favorites_count' => $citation->favorites->first()->total_favorites ?? 0,
             // ],
         ], 200);
     }
@@ -156,10 +189,11 @@ class QuoteController extends Controller
     public function update(Request $request, string $id)
     {
 
-        $user     = auth()->user();
+        $role     = $request->role;
+        $user_id  = $request->user_id;
         $citation = Quote::findOrFail($id);
 
-        if (! $user->hasRole('Admin') && $user->id !== $citation->user_id) {
+        if (! ($role === "Admin" || $user_id === $citation->user_id)) {
             return response()->json(['message' => 'Accès refusé'], 403);
         }
 
@@ -189,17 +223,18 @@ class QuoteController extends Controller
      */
     public function destroy(Request $request, string $id)
     {
-
-        $role    = $request->role;
-        $user_id = $request->user_id;
+        $role    = $request->role ?? null;
+        $user_id = $request->user_id ?? null;
 
         $citation = Quote::findOrFail($id);
 
-        if (! $role === "Admin" || $user_id !== $citation->user_id) {
+        // Seul un Admin ou le propriétaire peut supprimer
+        if ($role !== "Admin" && $user_id != $citation->user_id) {
             return response()->json(['message' => 'Action non autorisée'], 403);
         }
 
         $citation->delete();
+
         return response()->json(['message' => 'Suppression réussie']);
     }
 
@@ -211,7 +246,6 @@ class QuoteController extends Controller
         $role    = $request->role;
         $user_id = $request->user_id;
 
-
         $citation = Quote::find($id);
 
         if (! $citation) {
@@ -221,13 +255,13 @@ class QuoteController extends Controller
         }
 
         if ($role === "Admin") {
-        $citation->is_valide = true;
-        $citation->save();
+            $citation->is_valide = true;
+            $citation->save();
 
-        return response()->json([
-            'message'  => 'Vous avez validé la citation.',
-            'citation' => $citation,
-        ], 200);
+            return response()->json([
+                'message'  => 'Vous avez validé la citation.',
+                'citation' => $citation,
+            ], 200);
         }
 
         return response()->json([
@@ -317,7 +351,21 @@ class QuoteController extends Controller
                 ], 400);
             }
 
-            $citations = Quote::with(['user', 'tags', 'categories'])
+            $citations = Quote::with([
+                'user:id,name',
+                'categories:id,name',
+                'tags:id,name',
+                'likes'     => function ($q) {
+                    $q->select('quote_id')
+                        ->selectRaw('count(*) as total_likes')
+                        ->groupBy('quote_id');
+                },
+                'favorites' => function ($q) {
+                    $q->select('quote_id')
+                        ->selectRaw('count(*) as total_favorites')
+                        ->groupBy('quote_id');
+                },
+            ])
                 ->inRandomOrder()
                 ->take((int) $count)
                 ->get();
@@ -332,15 +380,15 @@ class QuoteController extends Controller
 
             $formattedCitations = $citations->map(function ($quote) {
                 return [
-                    'id'         => $quote->id,
-                    'content'    => $quote->content,
-                    'user'       => $quote->user ? $quote->user->name : null,
-                    'popularite' => $quote->popularite,
-                    'created_at' => $quote->created_at->format('Y-m-d H:i:s'),
-                    'tags'       => $quote->tags->pluck('name'),
-                    'categories' => $quote->categories->pluck('name'),
-                    // 'likes_count' => $quote->likes_count ?? 0,
-                    // 'views_count' => $quote->views_count ?? 0,
+                    'id'              => $quote->id,
+                    'content'         => $quote->content,
+                    'user'            => $quote->user ? $quote->user->name : null,
+                    'popularite'      => $quote->popularite,
+                    'created_at'      => $quote->created_at->format('Y-m-d H:i:s'),
+                    'tags'            => $quote->tags->pluck('name'),
+                    'categories'      => $quote->categories->pluck('name'),
+                    'likes_count'     => $quote->likes->first()->total_likes ?? 0,
+                    'favorites_count' => $quote->favorites->first()->total_favorites ?? 0,
                 ];
             });
 
@@ -388,42 +436,124 @@ class QuoteController extends Controller
     }
 
     // ***************************************************************************************************************************
-
-    //  public function popularite()
-    //  {
-    //     $quotes = Quote::orderBy('popularite', 'desc')->take(6)->get();
-
-    //     return response()->json([
-    //         'success' => true,
-    //         'data' => $quotes
-    //     ]);
-    //  }
-
     public function popularite()
     {
-        $quotes = Quote::with(['user', 'categories', 'tags'])
+        $quotes = Quote::with([
+            'user:id,name',
+            'categories:id,name',
+            'tags:id,name',
+            'likes'     => function ($q) {
+                $q->select('quote_id')
+                    ->selectRaw('count(*) as total_likes')
+                    ->groupBy('quote_id');
+            },
+            'favorites' => function ($q) {
+                $q->select('quote_id')
+                    ->selectRaw('count(*) as total_favorites')
+                    ->groupBy('quote_id');
+            },
+        ])
             ->orderBy('popularite', 'desc')
             ->take(6)
             ->get()
             ->map(function ($quote) {
                 return [
-                    'id'         => $quote->id,
-                    'content'    => $quote->content,
-                    'popularite' => $quote->popularite,
-                    'user'       => $quote->user ? $quote->user->name : null,
-                    'categories' => $quote->categories->pluck('name'),
-                    'tags'       => $quote->tags->pluck('name'),
-                    'created_at' => $quote->created_at,
-                    'updated_at' => $quote->updated_at,
+                    'id'              => $quote->id,
+                    'content'         => $quote->content,
+                    'popularite'      => $quote->popularite,
+                    'user'            => $quote->user->name ?? 'Utilisateur inconnu',
+                    'categories'      => $quote->categories->pluck('name')->toArray(),
+                    'tags'            => $quote->tags->pluck('name')->toArray(),
+                    'created_at'      => $quote->created_at->toISOString(),
+                    'updated_at'      => $quote->updated_at->toISOString(),
+                    'likes_count'     => $quote->likes->first()->total_likes ?? 0,
+                    'favorites_count' => $quote->favorites->first()->total_favorites ?? 0,
                 ];
             });
 
         return response()->json([
             'success' => true,
             'data'    => $quotes,
-        ]);
+            'meta'    => [
+                'count'  => $quotes->count(),
+                'status' => 'success',
+            ],
+        ], 200);
     }
 
     // ***************************************************************************************************************************
+    // /** ********************************************************************************************************************
 
+    private function isLiked(string $user_id, string $quote_id): bool
+    {
+        return Like::where('user_id', $user_id)
+            ->where('quote_id', $quote_id)
+            ->exists();
+    }
+    // /** ********************************************************************************************************************
+
+    private function isFavorite(string $user_id, string $quote_id): bool
+    {
+        return Favorie::where('user_id', $user_id)
+            ->where('quote_id', $quote_id)
+            ->exists();
+    }
+
+//  ************************************************************************************************************************
+    public function userQuote(string $user_id)
+    {
+        $user = User::find($user_id);
+
+        if (! $user) {
+            return response()->json([
+                'message' => 'User not found',
+                'status'  => 'error',
+            ], 404);
+        }
+
+        $quotes = Quote::with([
+            'tags:id,name',
+            'categories:id,name',
+            'user:id,name',
+            'likes'     => function ($q) {
+                $q->select('quote_id')
+                    ->selectRaw('count(*) as total_likes')
+                    ->groupBy('quote_id');
+            },
+            'favorites' => function ($q) {
+                $q->select('quote_id')
+                    ->selectRaw('count(*) as total_favorites')
+                    ->groupBy('quote_id');
+            },
+        ])
+            ->where('user_id', $user_id)
+            ->get();
+
+        $formattedQuotes = $quotes->map(function ($quote) use ($user_id) {
+            return [
+                "id"              => $quote->id,
+                "content"         => $quote->content,
+                "user"            => $quote->user->name,
+                "popularity"      => $quote->popularite,
+                "is_valide"       => $quote->is_valide,
+                "is_deleted"      => ! is_null($quote->deleted_at),
+                "tags"            => $quote->tags->pluck('name')->toArray(),
+                "categories"      => $quote->categories->pluck('name')->toArray(),
+                "created_at"      => $quote->created_at->toISOString(),
+                "updated_at"      => $quote->updated_at->toISOString(),
+                "likes_count"     => $quote->likes->first()->total_likes ?? 0,
+                "favorites_count" => $quote->favorites->first()->total_favorites ?? 0,
+                "is_liked"        => $this->isLiked($user_id, $quote->id),
+                "is_favorite"     => $this->isFavorite($user_id, $quote->id),
+            ];
+        });
+
+        return response()->json([
+            'data' => $formattedQuotes,
+            'meta' => [
+                'count'  => $formattedQuotes->count(),
+                'status' => 'success',
+            ],
+        ], 200);
+    }
 }

@@ -116,10 +116,12 @@ class AuthController extends Controller
         }
 
         $user = $token->tokenable;
+        $role = $user->getRoleNames()->toArray();
         return response()->json([
             'authenticated' => true,
             'user'          => $user,
             'roles'         => $user->getRoleNames()->toArray(),
+            'role'         => $role[0],
         ]);
     }
 

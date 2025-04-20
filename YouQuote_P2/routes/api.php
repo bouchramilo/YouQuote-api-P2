@@ -21,7 +21,9 @@ Route::apiResource('quotes', QuoteController::class);
 
 // Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('likes', LikeController::class);
+    Route::get('isliked/{user_id}/{quote_id}', action: [LikeController::class, 'isLiked']);
     Route::apiResource('favories', FavorieController::class);
+    Route::get('favories/user/{id}', [FavorieController::class, 'index']);
 
     Route::get('suppression', [SoftdeleteController::class, 'index'])->name('is_deleted');
     Route::get('suppression/{id}', [SoftdeleteController::class, 'show']);
@@ -33,6 +35,7 @@ Route::apiResource('quotes', QuoteController::class);
 
     Route::post('quotes/valider/{id}', [QuoteController::class, 'validateQuote']);
     Route::get('citations/nonvlider', [QuoteController::class, 'quoteNonValide']);
+    Route::get('citations/user/{id}', [QuoteController::class, 'userQuote']);
 
 // });
 

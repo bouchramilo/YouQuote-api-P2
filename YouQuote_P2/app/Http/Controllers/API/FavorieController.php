@@ -3,68 +3,105 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Favorie;
+use App\Models\Like;
 use App\Models\Quote;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 class FavorieController extends Controller
 {
     /** ********************************************************************************************************************
      * Display a listing of the resource.
      */
-    public function index()
+    //  ********************************************************************************************************************
+    private function isLiked(string $user_id, string $quote_id): bool
     {
-        $user = auth()->user();
+        return Like::where('user_id', $user_id)
+            ->where('quote_id', $quote_id)
+            ->exists();
+    }
 
-        $myFavorites = Favorie::where('user_id', $user->id)
-            ->with(['quote.tags', 'quote.categories', 'quote.user'])
+    //  ********************************************************************************************************************
+    public function index(string $id)
+    {
+        $myFavorites = Favorie::where('user_id', $id)
+            ->with(['quote' => function ($query) {
+                $query->with([
+                    'tags:id,name',
+                    'categories:id,name',
+                    'user:id,name',
+                    'likes'     => function ($q) {
+                        $q->select('quote_id')
+                            ->selectRaw('count(*) as total_likes')
+                            ->groupBy('quote_id');
+                    },
+                    'favorites' => function ($q) {
+                        $q->select('quote_id')
+                            ->selectRaw('count(*) as total_favorites')
+                            ->groupBy('quote_id');
+                    },
+                ]);
+            }])
             ->get();
 
         if ($myFavorites->isEmpty()) {
             return response()->json([
                 'message' => 'Aucun favori trouvé pour cet utilisateur.',
+                'data'    => [],
+                'meta'    => [
+                    'count'  => 0,
+                    'status' => 'success',
+                ],
             ], 200);
         }
 
-        $formattedMyFavorites = $myFavorites->map(function ($favorie) {
+        $formattedMyFavorites = $myFavorites->map(function ($favorie) use ($id) {
             if (! $favorie->quote) {
                 return null;
             }
 
             return [
-                "citation" => [
-                    "id"         => $favorie->quote->id,
-                    "content"    => $favorie->quote->content,
-                    "user_id"    => $favorie->quote->user ? $favorie->quote->user->name : 'Utilisateur inconnu',
-                    "popularite" => $favorie->quote->popularite,
-                    "tags"       => $favorie->quote->tags ? $favorie->quote->tags->pluck('name') : [],
-                    "categories" => $favorie->quote->categories ? $favorie->quote->categories->pluck('name') : [],
+                "citation"  => [
+                    "id"              => $favorie->quote->id,
+                    "content"         => $favorie->quote->content,
+                    "user"            => optional($favorie->quote->user)->name ?? 'Utilisateur inconnu',
+                    "user_id"         => optional($favorie->quote->user)->id,
+                    "popularite"      => $favorie->quote->popularite,
+                    "tags"            => $favorie->quote->tags->pluck('name')->toArray(),
+                    "categories"      => $favorie->quote->categories->pluck('name')->toArray(),
+                    "likes_count"     => $favorie->quote->likes->first()->total_likes ?? 0,
+                    "favorites_count" => $favorie->quote->favorites->first()->total_favorites ?? 0,
+                    "is_liked"        => $this->isLiked($id, $favorie->quote->id),
                 ],
+                "favori_id" => $favorie->id,
+                "added_at"  => $favorie->created_at->toISOString(),
             ];
-        })->filter();
+        })->filter()->values();
 
-        return response()->json($formattedMyFavorites, 200);
+        return response()->json([
+            'data' => $formattedMyFavorites,
+            'meta' => [
+                'count'  => $formattedMyFavorites->count(),
+                'status' => 'success',
+            ],
+        ], 200);
     }
-
     /** ********************************************************************************************************************
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
     {
-        $user = $request->user();
+        $user_id  = $request->user_id;
+        $user     = User::findOrFail($user_id);
+        $quote_id = $request->quote_id;
 
         $validator = Validator::make($request->all(), [
             'quote_id' => [
                 'required',
                 'integer',
                 'exists:quotes,id',
-                Rule::unique('favories')->where(function ($query) use ($user) {
-                    return $query->where('user_id', $user->id);
-                }),
             ],
-        ], [
-            'quote_id.unique' => 'Vous avez déjà ajouté cette citation à vos favoris.',
         ]);
 
         if ($validator->fails()) {
@@ -73,7 +110,7 @@ class FavorieController extends Controller
             ], 400);
         }
 
-        $citation = Quote::withTrashed()->find($request->quote_id);
+        $citation = Quote::withTrashed()->find($quote_id);
 
         if (! $citation) {
             return response()->json([
@@ -87,23 +124,46 @@ class FavorieController extends Controller
             ], 410);
         }
 
-        $favorite = Favorie::create([
-            'quote_id' => $request->quote_id,
+        $existingLike = Favorie::where('user_id', $user->id)
+            ->where('quote_id', $quote_id)
+            ->first();
+
+        if ($existingLike) {
+            $existingLike->delete();
+
+            return response()->json([
+                "success"   => true,
+                "message"   => "Vous avez retiré votre like de cette citation.",
+                "favorites" => false,
+                "citation"  => [
+                    "id"         => $citation->id,
+                    "content"    => $citation->content,
+                    "user_id"    => $citation->user->name,
+                    "popularite" => $citation->popularite,
+                    "tags"       => $citation->tags->pluck('name'),
+                    "categories" => $citation->categories->pluck('name'),
+                ],
+            ], 200);
+        }
+
+        $like = Favorie::create([
+            'quote_id' => $quote_id,
             'user_id'  => $user->id,
         ]);
 
-        $favorite->load(['quote.tags', 'quote.categories', 'quote.user']);
+        $like->load(['quote.tags', 'quote.categories', 'quote.user']);
 
         return response()->json([
-            "success"  => true,
-            "message"  => "Vous avez ajouté une citation à vos favoris.",
-            "citation" => [
-                "id"         => $favorite->quote->id,
-                "content"    => $favorite->quote->content,
-                "user_id"    => $favorite->quote->user->name,
-                "popularite" => $favorite->quote->popularite,
-                "tags"       => $favorite->quote->tags->pluck('name'),
-                "categories" => $favorite->quote->categories->pluck('name'),
+            "success"   => true,
+            "message"   => "Vous avez aimé une citation.",
+            "favorites" => true,
+            "citation"  => [
+                "id"         => $like->quote->id,
+                "content"    => $like->quote->content,
+                "user_id"    => $like->quote->user->name,
+                "popularite" => $like->quote->popularite,
+                "tags"       => $like->quote->tags->pluck('name'),
+                "categories" => $like->quote->categories->pluck('name'),
             ],
         ], 201);
     }
@@ -114,32 +174,48 @@ class FavorieController extends Controller
     public function show(string $id)
     {
 
-        $user     = auth()->user();
-        $citation = Quote::findOrFail($id);
-
-        if (! $user->hasRole('Admin') && $user->id !== $citation->user_id) {
-            return response()->json(['message' => 'Accès refusé, Vouz n\'avez pas l\'accès de voir les Favories des quotes des autres auteurs'], 403);
-        }
-
-        $likes = Favorie::where('quote_id', $id)
-            ->with(['user', 'quote'])
+        $myFavorites = Favorie::where('quote_id', $id)
+            ->with(['quote' => function ($query) {
+                $query->with([
+                    'user:id,name,email',
+                ]);
+            }])
             ->get();
 
-        if ($likes->isEmpty()) {
+        if ($myFavorites->isEmpty()) {
             return response()->json([
-                'message' => 'Aucun user ajoute cette citation dans leur favories.',
-            ], 404);
+                'message' => 'Aucun favori trouvé pour cet utilisateur.',
+                'data'    => [],
+                'meta'    => [
+                    'count'  => 0,
+                    'status' => 'success',
+                ],
+            ], 200);
         }
 
-        $formattedLikes = $likes->map(function ($like) {
+        $formattedMyFavorites = $myFavorites->map(function ($favorie) use ($id) {
+            if (! $favorie->quote) {
+                return null;
+            }
+
             return [
-                'user préféré' => $like->user->name . '  -  ' . $like->user->email,
+                "citation"  => [
+                    "id"      => $favorie->quote->id,
+                    "user_name"    => optional($favorie->quote->user)->name ?? 'Utilisateur inconnu',
+                    "user_email"    => optional($favorie->quote->user)->email ?? 'Utilisateur inconnu',
+                    "user_id" => optional($favorie->quote->user)->id,
+                ],
+                "favori_id" => $favorie->id,
+                "added_at"  => $favorie->created_at->toISOString(),
             ];
-        });
+        })->filter()->values();
 
         return response()->json([
-            'quote'       => $citation->content,
-            'Favorie de ' => $formattedLikes,
+            'data' => $formattedMyFavorites,
+            'meta' => [
+                'count'  => $formattedMyFavorites->count(),
+                'status' => 'success',
+            ],
         ], 200);
     }
 
@@ -154,15 +230,28 @@ class FavorieController extends Controller
     /** ********************************************************************************************************************
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        $user = auth()->user();
-        $like = Favorie::where('user_id', $user->id)->where('quote_id', $id)->first();
-        $like->delete();
-        return response()->json([
-            "success" => true,
-            "message" => "Vous avez retiré un quote dans votre favories.",
-        ], 200);
+        $user_id = $request->user_id;
+        $user    = User::findOrFail($user_id);
 
+        $favori = Favorie::where('id', $id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (! $favori) {
+            return response()->json([
+                "success" => false,
+                "message" => "Favori non trouvé ou vous n'avez pas la permission.",
+            ], 404);
+        }
+
+        $favori->delete();
+
+        return response()->json([
+            "success"   => true,
+            "message"   => "Vous avez retiré une citation de vos favoris.",
+            "favori_id" => $id,
+        ], 200);
     }
 }
